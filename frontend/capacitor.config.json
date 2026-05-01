@@ -1,0 +1,9 @@
+{
+  "appId": "com.chills.payroll",
+  "appName": "ChillsPayroll",
+  "webDir": "dist",
+  "server": {
+    "androidScheme": "http",
+    "cleartext": true
+  }
+}

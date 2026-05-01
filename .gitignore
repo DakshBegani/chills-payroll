@@ -1,0 +1,30 @@
+# Dependencies
+node_modules/
+
+# Database - DO NOT COMMIT
+backend/database.sqlite
+*.sqlite
+*.sqlite3
+*.db
+
+# Build outputs
+frontend/dist/
+frontend/android/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# Environment files
+.env
+.env.local
+.env.production
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
