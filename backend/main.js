@@ -1,4 +1,4 @@
-const { app, Tray, Menu, nativeImage } = require('electron');
+const { app, Tray, Menu, nativeImage, Notification, dialog } = require('electron');
 const path = require('path');
 const os = require('os');
 const { startServer } = require('./index');
@@ -28,8 +28,17 @@ if (!gotTheLock) {
         openAsHidden: true, // start hidden in background
       });
 
+      // 4. Notify the user that it started successfully
+      dialog.showMessageBox({
+        type: 'info',
+        title: 'Chills Payroll Server',
+        message: 'The Payroll Server is now running in the background!',
+        detail: `You can find the server icon in your Windows System Tray (bottom right corner).\nServer IP: ${getLocalIPAddress()}:${port}`
+      });
+
     } catch (err) {
       console.error('Failed to start server:', err);
+      dialog.showErrorBox('Server Error', `Failed to start server. Port might be in use or database error.\n\n${err.message}`);
       app.quit();
     }
   });
@@ -53,10 +62,9 @@ function getLocalIPAddress() {
 }
 
 function setupTray(port) {
-  // Create a simple blank icon, or load one if available
-  // To avoid errors, using nativeImage to create an empty transparent icon for now.
-  // We can replace this with a real icon file (e.g., path.join(__dirname, 'icon.png'))
-  const icon = nativeImage.createEmpty(); 
+  // Create a 16x16 blue square as a fallback icon
+  const iconBase64 = 'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAO0lEQVQ4T2NkoBAwUqifYdQAhtEwGEjAYPj///9/bJgYGBgYWBgYGBiwhTEYjFpANLUMo2EQpajpFEgAAM3kH+HT/1V0AAAAAElFTkSuQmCC';
+  const icon = nativeImage.createFromBuffer(Buffer.from(iconBase64, 'base64')); 
   tray = new Tray(icon);
   
   const localIP = getLocalIPAddress();
