@@ -1,5 +1,4 @@
-const sqlite3 = require('sqlite3');
-const { open } = require('sqlite');
+const Database = require('better-sqlite3');
 const path = require('path');
 const os = require('os');
 const fs = require('fs');
@@ -9,24 +8,18 @@ if (!fs.existsSync(DATA_DIR)) {
   fs.mkdirSync(DATA_DIR, { recursive: true });
 }
 
-let db;
-
 const DB_PATH = path.join(DATA_DIR, 'database.sqlite');
 
-async function initDB() {
-  db = await open({
-    filename: DB_PATH,
-    driver: sqlite3.Database
-  });
+let db;
 
-  // Drop existing tables to enforce the new schema
-  await db.exec(`
-    DROP TABLE IF EXISTS attendance;
-    DROP TABLE IF EXISTS users;
-  `);
+function initDB() {
+  db = new Database(DB_PATH);
 
-  // Create tables
-  await db.exec(`
+  // Enable WAL mode for better performance
+  db.pragma('journal_mode = WAL');
+
+  // Create tables only if they don't exist — NEVER drop them
+  db.exec(`
     CREATE TABLE IF NOT EXISTS users (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL,
@@ -42,7 +35,7 @@ async function initDB() {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       user_id INTEGER NOT NULL,
       date TEXT NOT NULL,
-      status TEXT NOT NULL, -- 'present', 'absent', 'half-day'
+      status TEXT NOT NULL,
       logged_by INTEGER NOT NULL,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       UNIQUE(user_id, date),
@@ -51,20 +44,16 @@ async function initDB() {
     );
   `);
 
-  // Seed data if DB is fresh
-  const userCount = await db.get('SELECT COUNT(*) as count FROM users');
+  // Seed data only if the database is completely fresh
+  const userCount = db.prepare('SELECT COUNT(*) as count FROM users').get();
   if (userCount.count === 0) {
     // Insert CEO
-    await db.run(
-      'INSERT INTO users (name, username, password, role) VALUES (?, ?, ?, ?)',
-      ['Pritesh Begani (CEO)', 'priteshbegani', '1984', 'ceo']
-    );
+    db.prepare('INSERT INTO users (name, username, password, role) VALUES (?, ?, ?, ?)')
+      .run('Pritesh Begani (CEO)', 'priteshbegani', '1984', 'ceo');
 
     // Insert Attendance Kiosk
-    await db.run(
-      'INSERT INTO users (name, username, password, role) VALUES (?, ?, ?, ?)',
-      ['Attendance Kiosk', 'chillsicecream', '1978', 'attendance_taker']
-    );
+    db.prepare('INSERT INTO users (name, username, password, role) VALUES (?, ?, ?, ?)')
+      .run('Attendance Kiosk', 'chillsicecream', '1978', 'attendance_taker');
 
     // Seed Employees
     const employees = [
@@ -97,29 +86,20 @@ async function initDB() {
       { name: 'Damini Banjare', wage: 200, phone: null }
     ];
 
-    for (const emp of employees) {
-      // Create a unique username for each employee in case they ever need to log in (or just random)
-      const empUsername = `worker-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
-      const empPassword = '0000'; // default password
-      const monthlySalary = emp.wage * 30;
-      // We can store the phone number in username temporarily if we want, or just generate one, 
-      // but since the schema expects username to be unique, we'll use a random string.
-      // Or we can add back the phone column. Given the table has contact info, let's just make their username their phone number if it exists, otherwise random.
-      let username = emp.phone ? emp.phone : empUsername;
+    const insertEmployee = db.prepare(
+      'INSERT OR IGNORE INTO users (name, username, password, role, salary) VALUES (?, ?, ?, ?, ?)'
+    );
+    const insertWithRandom = db.prepare(
+      'INSERT INTO users (name, username, password, role, salary) VALUES (?, ?, ?, ?, ?)'
+    );
 
-      // Handle duplicates in phone numbers (e.g., Tinku and Padma have the same number)
+    for (const emp of employees) {
+      const monthlySalary = emp.wage * 30;
+      const username = emp.phone || `worker-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
       try {
-        await db.run(
-          'INSERT INTO users (name, username, password, role, salary) VALUES (?, ?, ?, ?, ?)',
-          [emp.name, username, empPassword, 'employee', monthlySalary]
-        );
-      } catch (err) {
-        // If unique constraint fails (like duplicate phone number), fallback to random username
-        username = empUsername;
-        await db.run(
-          'INSERT INTO users (name, username, password, role, salary) VALUES (?, ?, ?, ?, ?)',
-          [emp.name, username, empPassword, 'employee', monthlySalary]
-        );
+        insertEmployee.run(emp.name, username, '0000', 'employee', monthlySalary);
+      } catch {
+        insertWithRandom.run(emp.name, `worker-${Date.now()}-${Math.floor(Math.random() * 1000)}`, '0000', 'employee', monthlySalary);
       }
     }
   }
