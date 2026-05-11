@@ -1,21 +1,41 @@
 {
   "name": "chills-payroll-backend",
   "version": "1.0.0",
-  "description": "Backend for Chills Payroll and Attendance App",
-  "main": "index.js",
+  "description": "Backend API for Chills Payroll",
+  "main": "main.js",
   "scripts": {
-    "start": "node index.js",
-    "dev": "nodemon index.js"
+    "start": "electron .",
+    "dev": "nodemon index.js",
+    "dist": "electron-builder --win --x64"
+  },
+  "build": {
+    "appId": "com.chills.payrollserver",
+    "productName": "Chills Payroll Server",
+    "win": {
+      "target": "nsis",
+      "icon": "icon.ico"
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "runAfterFinish": true
+    }
   },
   "dependencies": {
     "cors": "^2.8.5",
-    "dotenv": "^16.4.5",
+    "dotenv": "^16.6.1",
     "express": "^4.19.2",
+    "express-rate-limit": "^8.5.1",
+    "helmet": "^8.1.0",
     "jsonwebtoken": "^9.0.2",
+    "node-cron": "^4.2.1",
+    "pm2": "^7.0.1",
     "sqlite": "^5.1.1",
     "sqlite3": "^5.1.7"
   },
   "devDependencies": {
+    "electron": "^29.1.0",
+    "electron-builder": "^24.13.3",
     "nodemon": "^3.1.0"
   }
 }

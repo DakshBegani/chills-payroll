@@ -1,12 +1,21 @@
 const sqlite3 = require('sqlite3');
 const { open } = require('sqlite');
 const path = require('path');
+const os = require('os');
+const fs = require('fs');
+
+const DATA_DIR = path.join(os.homedir(), '.chills-payroll');
+if (!fs.existsSync(DATA_DIR)) {
+  fs.mkdirSync(DATA_DIR, { recursive: true });
+}
 
 let db;
 
+const DB_PATH = path.join(DATA_DIR, 'database.sqlite');
+
 async function initDB() {
   db = await open({
-    filename: path.join(__dirname, 'database.sqlite'),
+    filename: DB_PATH,
     driver: sqlite3.Database
   });
 
@@ -97,7 +106,7 @@ async function initDB() {
       // but since the schema expects username to be unique, we'll use a random string.
       // Or we can add back the phone column. Given the table has contact info, let's just make their username their phone number if it exists, otherwise random.
       let username = emp.phone ? emp.phone : empUsername;
-      
+
       // Handle duplicates in phone numbers (e.g., Tinku and Padma have the same number)
       try {
         await db.run(

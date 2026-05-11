@@ -1,0 +1,14 @@
+directories:
+  output: dist
+  buildResources: build
+appId: com.chills.payrollserver
+productName: Chills Payroll Server
+win:
+  target: nsis
+  icon: icon.ico
+nsis:
+  oneClick: true
+  perMachine: false
+  runAfterFinish: true
+files: []
+electronVersion: 29.4.6
