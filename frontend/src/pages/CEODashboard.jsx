@@ -2,9 +2,10 @@ import { useState, useEffect } from 'react';
 import { Eye, Edit2, Download, Plus, Search as SearchIcon, Home, FileText, X, Trash2, ChevronDown, ChevronUp, Edit3, Check, Minus, Calendar, Bell } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
-const API_URL = 'http://192.168.29.128:5001';
+import { getApiUrl } from '../config';
 
 export default function CEODashboard() {
+  const API_URL = getApiUrl(); // reads from localStorage — updated via Settings
   const [employees, setEmployees] = useState([]);
   const [logs, setLogs] = useState([]);
 
@@ -536,6 +537,9 @@ export default function CEODashboard() {
                       </button>
                       <button style={{ background: '#f4f5f7', border: 'none', cursor: 'pointer', padding: '0.5rem', borderRadius: '50%', color: 'var(--text-dark)' }} onClick={() => { setForm(emp); setShowForm(true) }} title="Edit Employee">
                         <Edit2 size={16} />
+                      </button>
+                      <button style={{ background: '#fff0f0', border: 'none', cursor: 'pointer', padding: '0.5rem', borderRadius: '50%', color: '#e53e3e' }} onClick={() => handleDelete(emp.id)} title="Delete Employee">
+                        <Trash2 size={16} />
                       </button>
                     </div>
                   </div>

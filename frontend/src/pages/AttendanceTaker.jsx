@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Check, Minus, Clock, Calendar, Search as SearchIcon, Home, Edit3, ChevronDown, ChevronUp } from 'lucide-react';
+import { getApiUrl } from '../config';
 
 export default function AttendanceTaker() {
+  const API_URL = getApiUrl();
   const [employees, setEmployees] = useState([]);
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [logs, setLogs] = useState({});
@@ -25,7 +27,7 @@ export default function AttendanceTaker() {
   const [expandAbsent, setExpandAbsent] = useState(false);
 
   const fetchEmployees = async () => {
-    const res = await fetch(`http://192.168.29.128:5001/api/users`, {
+    const res = await fetch(`${getApiUrl()}/api/users`, {
       headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
     });
     if(res.ok) setEmployees(await res.json());
@@ -37,7 +39,7 @@ export default function AttendanceTaker() {
 
   useEffect(() => {
     const fetchLogs = async () => {
-      const res = await fetch(`http://192.168.29.128:5001/api/attendance?start_date=${date}&end_date=${date}`, {
+      const res = await fetch(`${getApiUrl()}/api/attendance?start_date=${date}&end_date=${date}`, {
         headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
       });
       if(res.ok) {
@@ -53,7 +55,7 @@ export default function AttendanceTaker() {
   }, [date]);
 
   const markAttendance = async (userId, status) => {
-    await fetch(`http://192.168.29.128:5001/api/attendance`, {
+    await fetch(`${getApiUrl()}/api/attendance`, {
       method: 'POST',
       headers: { 
         'Content-Type': 'application/json',
@@ -71,7 +73,7 @@ export default function AttendanceTaker() {
     
     const end = new Date().toISOString().split('T')[0];
     const start = '2024-01-01'; // Fetch all history
-    const res = await fetch(`http://192.168.29.128:5001/api/attendance?start_date=${start}&end_date=${end}&user_id=${emp.id}`, {
+    const res = await fetch(`${getApiUrl()}/api/attendance?start_date=${start}&end_date=${end}&user_id=${emp.id}`, {
       headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
     });
     if (res.ok) setEmployeeStats(await res.json());
@@ -80,7 +82,7 @@ export default function AttendanceTaker() {
   const fixAbsent = async (userId, absentDate) => {
     if (!window.confirm(`Are you sure you want to mark this employee as PRESENT for ${absentDate}?`)) return;
 
-    await fetch(`http://192.168.29.128:5001/api/attendance`, {
+    await fetch(`${getApiUrl()}/api/attendance`, {
       method: 'POST',
       headers: { 
         'Content-Type': 'application/json',
@@ -96,7 +98,7 @@ export default function AttendanceTaker() {
     if (!selectedManualEmp) return alert("Please select an employee first.");
     if (!window.confirm(`Mark ${selectedManualEmp.name} as ${status.toUpperCase()} for ${formatIndianDate(manualDate)}?`)) return;
 
-    await fetch(`http://192.168.29.128:5001/api/attendance`, {
+    await fetch(`${getApiUrl()}/api/attendance`, {
       method: 'POST',
       headers: { 
         'Content-Type': 'application/json',
@@ -116,7 +118,7 @@ export default function AttendanceTaker() {
     
     const today = new Date().toISOString().split('T')[0];
     try {
-      await fetch(`http://192.168.29.128:5001/api/attendance`, {
+      await fetch(`${getApiUrl()}/api/attendance`, {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',

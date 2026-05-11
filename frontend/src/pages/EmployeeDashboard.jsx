@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
+import { getApiUrl } from '../config';
 
 export default function EmployeeDashboard({ user }) {
   const [logs, setLogs] = useState([]);
@@ -10,7 +11,7 @@ export default function EmployeeDashboard({ user }) {
       const start = new Date();
       start.setDate(end.getDate() - 14);
       
-      const res = await fetch(`http://192.168.29.128:5001/api/attendance?start_date=${start.toISOString().split('T')[0]}&end_date=${end.toISOString().split('T')[0]}`, {
+      const res = await fetch(`${getApiUrl()}/api/attendance?start_date=${start.toISOString().split('T')[0]}&end_date=${end.toISOString().split('T')[0]}`, {
         headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
       });
       if(res.ok) setLogs(await res.json());
