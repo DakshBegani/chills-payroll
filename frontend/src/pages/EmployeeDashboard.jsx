@@ -37,7 +37,7 @@ export default function EmployeeDashboard({ user }) {
             <div>
               <p style={{fontWeight: 700, fontSize: '1rem'}}>{log.date}</p>
             </div>
-            <span className={`badge badge-${log.status}`}>{log.status}</span>
+            <span className={`badge badge-${log.status}`} style={{textTransform: 'capitalize'}}>{log.status.replace('-', ' ')}</span>
           </div>
         ))}
       </div>

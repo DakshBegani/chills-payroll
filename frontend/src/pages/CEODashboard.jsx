@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Eye, Edit2, Download, Plus, Search as SearchIcon, Home, FileText, X, Trash2, ChevronDown, ChevronUp, Edit3, Check, Minus, Calendar, Bell } from 'lucide-react';
+import { Eye, Edit2, Download, Plus, Search as SearchIcon, Home, FileText, X, Trash2, ChevronDown, ChevronUp, Edit3, Check, Minus, Calendar, Bell, Sun } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 import { getApiUrl } from '../config';
@@ -23,6 +23,7 @@ export default function CEODashboard() {
 
   // Bulk Attendance State
   const [bulkAttendance, setBulkAttendance] = useState({});
+  const [localSelection, setLocalSelection] = useState({}); // pending selection before submit
 
   // Form State
   const [showForm, setShowForm] = useState(false);
@@ -32,6 +33,7 @@ export default function CEODashboard() {
   const [statsModal, setStatsModal] = useState(null);
   const [employeeStats, setEmployeeStats] = useState(null);
   const [expandAbsent, setExpandAbsent] = useState(false);
+  const [expandHalfDay, setExpandHalfDay] = useState(false);
 
   // History UI State
   const [expandedDate, setExpandedDate] = useState(null);
@@ -214,13 +216,12 @@ export default function CEODashboard() {
     fetchLogs();
   };
 
-  const submitBulkAttendance = async () => {
+  const submitAttendance = async (userId) => {
+    const status = localSelection[userId];
+    if (!status) return;
     const today = new Date().toISOString().split('T')[0];
-    const updates = Object.keys(bulkAttendance).map(userId => {
-      const status = bulkAttendance[userId];
-      if (!status) return Promise.resolve();
-
-      return fetch(`${API_URL}/api/attendance`, {
+    try {
+      await fetch(`${API_URL}/api/attendance`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -228,12 +229,13 @@ export default function CEODashboard() {
         },
         body: JSON.stringify({ user_id: userId, date: today, status })
       });
-    });
-
-    await Promise.all(updates);
-    alert('Attendance successfully logged for today!');
-    setBulkAttendance({});
-    fetchLogs();
+      setBulkAttendance(prev => ({ ...prev, [userId]: status }));
+      setLocalSelection(prev => { const next = {...prev}; delete next[userId]; return next; });
+      fetchLogs();
+    } catch (err) {
+      console.error(err);
+      alert('Failed to save attendance. Please try again.');
+    }
   };
 
   const formatIndianDate = (dateStr) => {
@@ -261,9 +263,10 @@ export default function CEODashboard() {
       const presentDays = empLogs.filter(l => l.status === 'present').length;
       const absentDays = empLogs.filter(l => l.status === 'absent').length;
       const leaveDays = empLogs.filter(l => l.status === 'leave').length;
+      const halfDays = empLogs.filter(l => l.status === 'half-day').length;
       const dailyRate = Number(emp.salary || 0) / 30;
-      const totalPayout = presentDays * dailyRate;
-      return { ...emp, presentDays, absentDays, leaveDays, dailyRate, totalPayout };
+      const totalPayout = (presentDays * dailyRate) + (halfDays * (dailyRate / 2));
+      return { ...emp, presentDays, absentDays, leaveDays, halfDays, dailyRate, totalPayout };
     });
 
     setPayrollSummary(summary);
@@ -301,6 +304,7 @@ export default function CEODashboard() {
     let presentToday = 0;
     let absentToday = 0;
     let leaveToday = 0;
+    let halfDayToday = 0;
     const todayStr = new Date().toISOString().split('T')[0];
 
     logs.forEach(log => {
@@ -309,6 +313,7 @@ export default function CEODashboard() {
         if (log.status === 'present') presentToday++;
         if (log.status === 'absent') absentToday++;
         if (log.status === 'leave') leaveToday++;
+        if (log.status === 'half-day') halfDayToday++;
       }
     });
 
@@ -316,20 +321,29 @@ export default function CEODashboard() {
     
     // Calculate total estimated payout for today based on present staff
     const todayPresentUserIds = logs.filter(l => l.date === todayStr && l.status === 'present').map(l => l.user_id);
-    const estimatedPayout = employees
-      .filter(e => todayPresentUserIds.includes(e.id))
-      .reduce((acc, e) => acc + (Number(e.salary || 0) / 30), 0);
+    const todayHalfDayUserIds = logs.filter(l => l.date === todayStr && l.status === 'half-day').map(l => l.user_id);
+    
+    let estimatedPayout = 0;
+    employees.forEach(e => {
+      if (todayPresentUserIds.includes(e.id)) {
+        estimatedPayout += (Number(e.salary || 0) / 30);
+      }
+      if (todayHalfDayUserIds.includes(e.id)) {
+        estimatedPayout += ((Number(e.salary || 0) / 30) / 2);
+      }
+    });
 
-    return { presentToday, absentToday, leaveToday, totalStaff, estimatedPayout };
+    return { presentToday, absentToday, leaveToday, halfDayToday, totalStaff, estimatedPayout };
   };
 
-  const { presentToday, absentToday, leaveToday, totalStaff, estimatedPayout } = calculateMetrics();
+  const { presentToday, absentToday, leaveToday, halfDayToday, totalStaff, estimatedPayout } = calculateMetrics();
 
   // Notification Data
   const today = new Date().toISOString().split('T')[0];
   const todayAbsentees = logs.filter(l => l.date === today && l.status === 'absent');
   const todayLeaves = logs.filter(l => l.date === today && l.status === 'leave');
-  const notificationCount = todayAbsentees.length + todayLeaves.length;
+  const todayHalfDays = logs.filter(l => l.date === today && l.status === 'half-day');
+  const notificationCount = todayAbsentees.length + todayLeaves.length + todayHalfDays.length;
 
   const filteredEmployees = employees.filter(e => e.name.toLowerCase().includes(searchQuery.toLowerCase()) && e.role === 'employee');
 
@@ -415,8 +429,16 @@ export default function CEODashboard() {
                                 ))}
                               </div>
                             )}
+                            {todayHalfDays.length > 0 && (
+                              <div style={{ padding: '0.75rem 1rem', borderTop: todayAbsentees.length > 0 ? '1px solid var(--border)' : 'none' }}>
+                                <p style={{ fontSize: '0.75rem', fontWeight: 700, color: '#b8860b', textTransform: 'uppercase', marginBottom: '0.5rem' }}>Half Day</p>
+                                {todayHalfDays.map(log => (
+                                  <div key={log.id} style={{ fontSize: '0.875rem', fontWeight: 600, padding: '0.25rem 0' }}>{log.employee_name}</div>
+                                ))}
+                              </div>
+                            )}
                             {todayLeaves.length > 0 && (
-                              <div style={{ padding: '0.75rem 1rem', borderTop: '1px solid var(--border)' }}>
+                              <div style={{ padding: '0.75rem 1rem', borderTop: (todayAbsentees.length > 0 || todayHalfDays.length > 0) ? '1px solid var(--border)' : 'none' }}>
                                 <p style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--info)', textTransform: 'uppercase', marginBottom: '0.5rem' }}>On Leave</p>
                                 {todayLeaves.map(log => (
                                   <div key={log.id} style={{ fontSize: '0.875rem', fontWeight: 600, padding: '0.25rem 0' }}>{log.employee_name}</div>
@@ -434,10 +456,14 @@ export default function CEODashboard() {
 
             <div className="card card-accent mb-6" style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
               <h2 style={{ fontSize: '1.25rem', fontWeight: 800, letterSpacing: '-0.5px', marginBottom: 0 }}>Today's Pulse</h2>
-              <div style={{ display: 'flex', gap: '2rem' }}>
+              <div style={{ display: 'flex', gap: '2rem', flexWrap: 'wrap' }}>
                 <div>
                   <p style={{ fontSize: '0.75rem', fontWeight: 700, opacity: 0.8, textTransform: 'uppercase' }}>Present</p>
                   <p style={{ fontSize: '2rem', fontWeight: 800 }}>{presentToday}</p>
+                </div>
+                <div>
+                  <p style={{ fontSize: '0.75rem', fontWeight: 700, opacity: 0.8, textTransform: 'uppercase' }}>Half Day</p>
+                  <p style={{ fontSize: '2rem', fontWeight: 800 }}>{halfDayToday}</p>
                 </div>
                 <div>
                   <p style={{ fontSize: '0.75rem', fontWeight: 700, opacity: 0.8, textTransform: 'uppercase' }}>Absent</p>
@@ -564,6 +590,7 @@ export default function CEODashboard() {
                   const status = bulkAttendance[emp.id];
                   const isAbsent = status === 'absent';
                   const isPresent = status === 'present';
+                  const isHalfDay = status === 'half-day';
 
                   return (
                     <div key={emp.id} className="card" style={{
@@ -571,12 +598,13 @@ export default function CEODashboard() {
                       display: 'flex',
                       justifyContent: 'space-between',
                       alignItems: 'center',
-                      background: isAbsent ? '#fff0f0' : isPresent ? '#f0fff4' : 'var(--card-bg)',
-                      border: isAbsent ? '1px solid #ffcaca' : isPresent ? '1px solid #c6f6d5' : '1px solid transparent',
+                      marginBottom: '0.75rem',
+                      background: isAbsent ? '#fff0f0' : isPresent ? '#f0fff4' : isHalfDay ? '#fff8eb' : 'var(--card-bg)',
+                      border: isAbsent ? '1px solid #ffcaca' : isPresent ? '1px solid #c6f6d5' : isHalfDay ? '1px solid #f6e0b5' : '1px solid transparent',
                       transition: 'all 0.2s'
                     }}>
                       <div>
-                        <h3 style={{ fontWeight: 700, color: isAbsent ? 'var(--danger)' : isPresent ? 'var(--success)' : 'var(--text-dark)', marginBottom: '0.15rem', textTransform: 'capitalize' }}>
+                        <h3 style={{ fontWeight: 700, color: isAbsent ? 'var(--danger)' : isPresent ? 'var(--success)' : isHalfDay ? '#b8860b' : 'var(--text-dark)', marginBottom: '0.15rem', textTransform: 'capitalize' }}>
                           {emp.name}
                         </h3>
                         {emp.role !== 'employee' && (
@@ -585,46 +613,63 @@ export default function CEODashboard() {
                           </p>
                         )}
                       </div>
-                      <div style={{ display: 'flex', gap: '0.5rem' }}>
-                        <button
-                          onClick={() => setBulkAttendance(prev => ({ ...prev, [emp.id]: isPresent ? null : 'present' }))}
-                          style={{
-                            width: '40px', height: '40px', borderRadius: '50%', border: 'none', cursor: 'pointer',
-                            display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            background: isPresent ? 'var(--success)' : '#f4f5f7',
-                            color: isPresent ? 'white' : 'var(--text-light)',
-                            transition: 'all 0.2s'
-                          }}
-                        >
-                          <Check size={20} strokeWidth={isPresent ? 3 : 2} />
-                        </button>
-                        <button
-                          onClick={() => setBulkAttendance(prev => ({ ...prev, [emp.id]: isAbsent ? null : 'absent' }))}
-                          style={{
-                            width: '40px', height: '40px', borderRadius: '50%', border: 'none', cursor: 'pointer',
-                            display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            background: isAbsent ? 'var(--danger)' : '#f4f5f7',
-                            color: isAbsent ? 'white' : 'var(--text-light)',
-                            transition: 'all 0.2s'
-                          }}
-                        >
-                          <X size={20} strokeWidth={isAbsent ? 3 : 2} />
-                        </button>
+                      <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                        {status ? (
+                          /* FROZEN: already submitted */
+                          <div style={{
+                            padding: '0.5rem 1rem', borderRadius: '9999px', fontSize: '0.75rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px',
+                            background: isPresent ? 'var(--success)' : isHalfDay ? '#f59e0b' : 'var(--danger)',
+                            color: 'white', display: 'flex', alignItems: 'center', gap: '0.25rem'
+                          }}>
+                            {isPresent && <><Check size={14} strokeWidth={3} /> Present</>}
+                            {isHalfDay && <><Sun size={14} strokeWidth={3} /> Half Day</>}
+                            {isAbsent && <><X size={14} strokeWidth={3} /> Absent</>}
+                            {status === 'leave' && <><Calendar size={14} strokeWidth={3} /> Leave</>}
+                          </div>
+                        ) : (
+                          /* PENDING: selecting but not yet submitted */
+                          <>
+                            {(['present', 'half-day', 'absent']).map(s => {
+                              const sel = localSelection[emp.id] === s;
+                              const icon = s === 'present' ? <Check size={18} strokeWidth={sel ? 3 : 2} /> : s === 'half-day' ? <Sun size={18} strokeWidth={sel ? 3 : 2} /> : <X size={18} strokeWidth={sel ? 3 : 2} />;
+                              const activeColor = s === 'present' ? 'var(--success)' : s === 'half-day' ? '#f59e0b' : 'var(--danger)';
+                              return (
+                                <button
+                                  key={s}
+                                  onClick={() => setLocalSelection(prev => ({ ...prev, [emp.id]: prev[emp.id] === s ? null : s }))}
+                                  style={{
+                                    width: '40px', height: '40px', borderRadius: '50%', border: sel ? `2px solid ${activeColor}` : '2px solid transparent', cursor: 'pointer',
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                    background: sel ? activeColor : '#f4f5f7',
+                                    color: sel ? 'white' : 'var(--text-light)',
+                                    transition: 'all 0.18s',
+                                    transform: sel ? 'scale(1.1)' : 'scale(1)'
+                                  }}
+                                  title={`Mark ${s.replace('-', ' ')}`}
+                                >
+                                  {icon}
+                                </button>
+                              );
+                            })}
+                            {localSelection[emp.id] && (
+                              <button
+                                onClick={() => submitAttendance(emp.id)}
+                                style={{
+                                  padding: '0.4rem 0.9rem', borderRadius: '9999px', border: 'none', cursor: 'pointer',
+                                  background: 'var(--accent)', color: 'white', fontSize: '0.75rem', fontWeight: 800,
+                                  transition: 'all 0.18s', boxShadow: '0 2px 8px rgba(99,102,241,0.3)'
+                                }}
+                                title="Confirm and lock attendance"
+                              >
+                                Submit
+                              </button>
+                            )}
+                          </>
+                        )}
                       </div>
                     </div>
                   );
                 })}
-            </div>
-
-            <div style={{ position: 'fixed', bottom: '85px', left: '50%', transform: 'translateX(-50%)', width: '100%', maxWidth: '440px', padding: '0 1.5rem', zIndex: 90 }}>
-              <button
-                className="btn"
-                style={{ width: '100%', padding: '1.25rem', fontSize: '1.125rem', boxShadow: '0 10px 25px rgba(0,0,0,0.1)' }}
-                onClick={submitBulkAttendance}
-                disabled={Object.values(bulkAttendance).filter(Boolean).length === 0}
-              >
-                Submit Attendance
-              </button>
             </div>
           </motion.div>
         )}
@@ -746,6 +791,9 @@ export default function CEODashboard() {
                   <button className="btn" style={{ background: 'var(--success)', display: 'flex', gap: '0.5rem' }} onClick={() => submitManualEntry('present')} disabled={!selectedManualEmp}>
                     <Check size={18} /> Mark as Present
                   </button>
+                  <button className="btn" style={{ background: '#f59e0b', display: 'flex', gap: '0.5rem', color: 'white' }} onClick={() => submitManualEntry('half-day')} disabled={!selectedManualEmp}>
+                    <Sun size={18} /> Mark as Half Day
+                  </button>
                   <button className="btn" style={{ background: 'var(--danger)', display: 'flex', gap: '0.5rem' }} onClick={() => submitManualEntry('absent')} disabled={!selectedManualEmp}>
                     <Minus size={18} /> Mark as Absent
                   </button>
@@ -814,9 +862,11 @@ export default function CEODashboard() {
                 const leaveCount = employeeStats.filter(l => l.status === 'leave').length;
                 const absentLogs = employeeStats.filter(l => l.status === 'absent');
                 const absentCount = absentLogs.length;
+                const halfDayLogs = employeeStats.filter(l => l.status === 'half-day');
+                const halfDayCount = halfDayLogs.length;
                 const monthlySalary = Number(statsModal.salary || 0);
                 const dailyRate = monthlySalary / 30;
-                const totalPayout = presentCount * dailyRate;
+                const totalPayout = (presentCount * dailyRate) + (halfDayCount * (dailyRate / 2));
 
                 return (
                   <div>
@@ -867,6 +917,45 @@ export default function CEODashboard() {
                               style={{ marginTop: '1rem', borderTop: '1px solid var(--border)', paddingTop: '0.5rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}
                             >
                               {absentLogs.map(log => (
+                                <div key={log.date} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                  <span style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-dark)' }}>{formatIndianDate(log.date)}</span>
+                                  <button
+                                    className="btn btn-accent"
+                                    style={{ padding: '0.35rem 0.75rem', width: 'auto', fontSize: '0.75rem', borderRadius: '8px' }}
+                                    onClick={() => fixAbsent(statsModal.id, log.date)}
+                                  >
+                                    Mark Present
+                                  </button>
+                                </div>
+                              ))}
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      </div>
+
+                      <div style={{ background: '#fafafa', padding: '1rem', borderRadius: '16px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <span className="badge badge-half-day" style={{background: '#fff0d1', color: '#784c04', padding: '0.25rem 0.75rem', borderRadius: '9999px', fontSize: '0.75rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px'}}>Half Day</span>
+                          <span style={{ fontWeight: 800, fontSize: '1.25rem', color: 'var(--text-dark)' }}>{halfDayCount} <span style={{ fontSize: '0.875rem', color: 'var(--text-light)', fontWeight: 500 }}>days</span></span>
+                        </div>
+
+                        {halfDayCount > 0 && (
+                          <button
+                            style={{ marginTop: '0.75rem', background: 'transparent', border: 'none', color: 'var(--text-light)', fontSize: '0.75rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.25rem', cursor: 'pointer', padding: 0 }}
+                            onClick={() => setExpandHalfDay(!expandHalfDay)}
+                          >
+                            {expandHalfDay ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                            {expandHalfDay ? 'Hide dates' : 'View half day dates'}
+                          </button>
+                        )}
+
+                        <AnimatePresence>
+                          {expandHalfDay && halfDayCount > 0 && (
+                            <motion.div
+                              initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
+                              style={{ marginTop: '1rem', borderTop: '1px solid var(--border)', paddingTop: '0.5rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}
+                            >
+                              {halfDayLogs.map(log => (
                                 <div key={log.date} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                   <span style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-dark)' }}>{formatIndianDate(log.date)}</span>
                                   <button
@@ -972,6 +1061,7 @@ export default function CEODashboard() {
                       </div>
                       <div style={{ display: 'flex', gap: '0.5rem' }}>
                         <span style={{ flex: 1, textAlign: 'center', background: '#f0fff4', color: 'var(--success)', padding: '0.4rem', borderRadius: '8px', fontSize: '0.75rem', fontWeight: 700 }}>✓ {emp.presentDays} Present</span>
+                        <span style={{ flex: 1, textAlign: 'center', background: '#fff0d1', color: '#784c04', padding: '0.4rem', borderRadius: '8px', fontSize: '0.75rem', fontWeight: 700 }}>◐ {emp.halfDays} Half</span>
                         <span style={{ flex: 1, textAlign: 'center', background: '#fff0f0', color: 'var(--danger)', padding: '0.4rem', borderRadius: '8px', fontSize: '0.75rem', fontWeight: 700 }}>✗ {emp.absentDays} Absent</span>
                         <span style={{ flex: 1, textAlign: 'center', background: '#fffbeb', color: '#d97706', padding: '0.4rem', borderRadius: '8px', fontSize: '0.75rem', fontWeight: 700 }}>⏸ {emp.leaveDays} Leave</span>
                       </div>

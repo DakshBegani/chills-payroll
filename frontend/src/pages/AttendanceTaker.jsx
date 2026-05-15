@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Check, Minus, Clock, Calendar, Search as SearchIcon, Home, Edit3, ChevronDown, ChevronUp } from 'lucide-react';
+import { X, Check, Minus, Clock, Calendar, Search as SearchIcon, Home, Edit3, ChevronDown, ChevronUp, Sun } from 'lucide-react';
 import { getApiUrl } from '../config';
 
 export default function AttendanceTaker() {
@@ -15,6 +15,7 @@ export default function AttendanceTaker() {
 
   // Bulk Attendance State
   const [bulkAttendance, setBulkAttendance] = useState({});
+  const [localSelection, setLocalSelection] = useState({}); // pending selection before submit
 
   // Manual Entry State
   const [manualDate, setManualDate] = useState(new Date().toISOString().split('T')[0]);
@@ -112,10 +113,10 @@ export default function AttendanceTaker() {
     setSelectedManualEmp(null);
   };
 
-  const markInstantAttendance = async (userId, status) => {
-    // Optimistic UI update
-    setBulkAttendance(prev => ({...prev, [userId]: status}));
-    
+  const submitAttendance = async (userId) => {
+    const status = localSelection[userId];
+    if (!status) return;
+
     const today = new Date().toISOString().split('T')[0];
     try {
       await fetch(`${getApiUrl()}/api/attendance`, {
@@ -126,16 +127,12 @@ export default function AttendanceTaker() {
         },
         body: JSON.stringify({ user_id: userId, date: today, status })
       });
-      // Silent success since this is a kiosk mode
+      // Move from pending to confirmed (frozen)
+      setBulkAttendance(prev => ({...prev, [userId]: status}));
+      setLocalSelection(prev => { const next = {...prev}; delete next[userId]; return next; });
     } catch (err) {
       console.error(err);
-      alert('Failed to mark attendance. Please try again.');
-      // Revert on failure
-      setBulkAttendance(prev => {
-        const next = {...prev};
-        delete next[userId];
-        return next;
-      });
+      alert('Failed to save attendance. Please try again.');
     }
   };
 
@@ -206,6 +203,7 @@ export default function AttendanceTaker() {
                 const status = bulkAttendance[emp.id];
                 const isAbsent = status === 'absent';
                 const isPresent = status === 'present';
+                const isHalfDay = status === 'half-day';
                 
                 return (
                   <div key={emp.id} className="card" style={{ 
@@ -213,12 +211,13 @@ export default function AttendanceTaker() {
                     display: 'flex', 
                     justifyContent: 'space-between', 
                     alignItems: 'center',
-                    background: isAbsent ? '#fff0f0' : isPresent ? '#f0fff4' : 'var(--card-bg)',
-                    border: isAbsent ? '1px solid #ffcaca' : isPresent ? '1px solid #c6f6d5' : '1px solid transparent',
+                    marginBottom: '0.75rem',
+                    background: isAbsent ? '#fff0f0' : isPresent ? '#f0fff4' : isHalfDay ? '#fff8eb' : 'var(--card-bg)',
+                    border: isAbsent ? '1px solid #ffcaca' : isPresent ? '1px solid #c6f6d5' : isHalfDay ? '1px solid #f6e0b5' : '1px solid transparent',
                     transition: 'all 0.2s'
                   }}>
                     <div>
-                      <h3 style={{fontWeight: 700, color: isAbsent ? 'var(--danger)' : isPresent ? 'var(--success)' : 'var(--text-dark)', marginBottom: '0.15rem', textTransform: 'capitalize'}}>
+                      <h3 style={{fontWeight: 700, color: isAbsent ? 'var(--danger)' : isPresent ? 'var(--success)' : isHalfDay ? '#b8860b' : 'var(--text-dark)', marginBottom: '0.15rem', textTransform: 'capitalize'}}>
                         {emp.name}
                       </h3>
                       {emp.role !== 'employee' && (
@@ -227,31 +226,59 @@ export default function AttendanceTaker() {
                         </p>
                       )}
                     </div>
-                    <div style={{display: 'flex', gap: '0.5rem'}}>
-                      <button 
-                        onClick={() => markInstantAttendance(emp.id, isPresent ? 'absent' : 'present')}
-                        style={{
-                          width: '40px', height: '40px', borderRadius: '50%', border: 'none', cursor: 'pointer',
-                          display: 'flex', alignItems: 'center', justifyContent: 'center',
-                          background: isPresent ? 'var(--success)' : '#f4f5f7',
-                          color: isPresent ? 'white' : 'var(--text-light)',
-                          transition: 'all 0.2s'
-                        }}
-                      >
-                        <Check size={20} strokeWidth={isPresent ? 3 : 2} />
-                      </button>
-                      <button 
-                        onClick={() => markInstantAttendance(emp.id, isAbsent ? 'present' : 'absent')}
-                        style={{
-                          width: '40px', height: '40px', borderRadius: '50%', border: 'none', cursor: 'pointer',
-                          display: 'flex', alignItems: 'center', justifyContent: 'center',
-                          background: isAbsent ? 'var(--danger)' : '#f4f5f7',
-                          color: isAbsent ? 'white' : 'var(--text-light)',
-                          transition: 'all 0.2s'
-                        }}
-                      >
-                        <X size={20} strokeWidth={isAbsent ? 3 : 2} />
-                      </button>
+                    <div style={{display: 'flex', gap: '0.5rem', alignItems: 'center'}}>
+                      {status ? (
+                        /* FROZEN: row already submitted */
+                        <div style={{
+                          padding: '0.5rem 1rem', borderRadius: '9999px', fontSize: '0.75rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px',
+                          background: isPresent ? 'var(--success)' : isHalfDay ? '#f59e0b' : 'var(--danger)',
+                          color: 'white', display: 'flex', alignItems: 'center', gap: '0.25rem'
+                        }}>
+                          {isPresent && <><Check size={14} strokeWidth={3} /> Present</>}
+                          {isHalfDay && <><Sun size={14} strokeWidth={3} /> Half Day</>}
+                          {isAbsent && <><X size={14} strokeWidth={3} /> Absent</>}
+                          {status === 'leave' && <><Calendar size={14} strokeWidth={3} /> Leave</>}
+                        </div>
+                      ) : (
+                        /* PENDING: selecting but not yet submitted */
+                        <>
+                          {(['present', 'half-day', 'absent']).map(s => {
+                            const sel = localSelection[emp.id] === s;
+                            const icon = s === 'present' ? <Check size={18} strokeWidth={sel ? 3 : 2} /> : s === 'half-day' ? <Sun size={18} strokeWidth={sel ? 3 : 2} /> : <X size={18} strokeWidth={sel ? 3 : 2} />;
+                            const activeColor = s === 'present' ? 'var(--success)' : s === 'half-day' ? '#f59e0b' : 'var(--danger)';
+                            return (
+                              <button
+                                key={s}
+                                onClick={() => setLocalSelection(prev => ({ ...prev, [emp.id]: prev[emp.id] === s ? null : s }))}
+                                style={{
+                                  width: '40px', height: '40px', borderRadius: '50%', border: sel ? `2px solid ${activeColor}` : '2px solid transparent', cursor: 'pointer',
+                                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                  background: sel ? activeColor : '#f4f5f7',
+                                  color: sel ? 'white' : 'var(--text-light)',
+                                  transition: 'all 0.18s',
+                                  transform: sel ? 'scale(1.1)' : 'scale(1)'
+                                }}
+                                title={`Mark ${s.replace('-', ' ')}`}
+                              >
+                                {icon}
+                              </button>
+                            );
+                          })}
+                          {localSelection[emp.id] && (
+                            <button
+                              onClick={() => submitAttendance(emp.id)}
+                              style={{
+                                padding: '0.4rem 0.9rem', borderRadius: '9999px', border: 'none', cursor: 'pointer',
+                                background: 'var(--accent)', color: 'white', fontSize: '0.75rem', fontWeight: 800,
+                                transition: 'all 0.18s', boxShadow: '0 2px 8px rgba(99,102,241,0.3)'
+                              }}
+                              title="Confirm and lock attendance"
+                            >
+                              Submit
+                            </button>
+                          )}
+                        </>
+                      )}
                     </div>
                   </div>
                 );
@@ -323,6 +350,9 @@ export default function AttendanceTaker() {
                 <div style={{display: 'flex', flexDirection: 'column', gap: '0.75rem'}}>
                   <button className="btn" style={{background: 'var(--success)', display: 'flex', gap: '0.5rem'}} onClick={() => submitManualEntry('present')} disabled={!selectedManualEmp}>
                     <Check size={18}/> Mark as Present
+                  </button>
+                  <button className="btn" style={{background: '#f59e0b', display: 'flex', gap: '0.5rem', color: 'white'}} onClick={() => submitManualEntry('half-day')} disabled={!selectedManualEmp}>
+                    <Sun size={18}/> Mark as Half Day
                   </button>
                   <button className="btn" style={{background: 'var(--danger)', display: 'flex', gap: '0.5rem'}} onClick={() => submitManualEntry('absent')} disabled={!selectedManualEmp}>
                     <Minus size={18}/> Mark as Absent

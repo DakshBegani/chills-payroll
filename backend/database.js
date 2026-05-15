@@ -44,16 +44,15 @@ function initDB() {
     );
   `);
 
-  // Seed data only if the database is completely fresh
-  const userCount = db.prepare('SELECT COUNT(*) as count FROM users').get();
-  if (userCount.count === 0) {
-    // Insert CEO
-    db.prepare('INSERT INTO users (name, username, password, role) VALUES (?, ?, ?, ?)')
-      .run('Pritesh Begani (CEO)', 'priteshbegani', '1984', 'ceo');
+  // Ensure essential system accounts always exist
+  const insertSystemUser = db.prepare('INSERT OR IGNORE INTO users (name, username, password, role) VALUES (?, ?, ?, ?)');
+  insertSystemUser.run('Pritesh Begani (CEO)', 'priteshbegani', '1984', 'ceo');
+  insertSystemUser.run('Attendance Kiosk', 'chillsicecream', '1978', 'attendance_taker');
 
-    // Insert Attendance Kiosk
-    db.prepare('INSERT INTO users (name, username, password, role) VALUES (?, ?, ?, ?)')
-      .run('Attendance Kiosk', 'chillsicecream', '1978', 'attendance_taker');
+  // Seed employee data only if the database is completely fresh
+  const userCount = db.prepare('SELECT COUNT(*) as count FROM users').get();
+  // We check if count <= 2 because the 2 system users above were just inserted
+  if (userCount.count <= 2) {
 
     // Seed Employees
     const employees = [
