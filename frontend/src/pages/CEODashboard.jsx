@@ -345,7 +345,7 @@ export default function CEODashboard() {
   const todayHalfDays = logs.filter(l => l.date === today && l.status === 'half-day');
   const notificationCount = todayAbsentees.length + todayLeaves.length + todayHalfDays.length;
 
-  const filteredEmployees = employees.filter(e => e.name.toLowerCase().includes(searchQuery.toLowerCase()) && e.role === 'employee');
+  const filteredEmployees = employees.filter(e => (e.name || '').toLowerCase().includes(searchQuery.toLowerCase()) && e.role === 'employee');
 
   // Group logs by Date
   const groupedLogs = logs.reduce((acc, log) => {
@@ -585,7 +585,7 @@ export default function CEODashboard() {
             <div style={{ paddingBottom: '5rem' }}>
               {employees
                 .filter(e => e.role !== 'ceo')
-                .sort((a, b) => a.name.localeCompare(b.name))
+                .sort((a, b) => (a.name || '').localeCompare(b.name || ''))
                 .map(emp => {
                   const status = bulkAttendance[emp.id];
                   const isAbsent = status === 'absent';
@@ -750,7 +750,7 @@ export default function CEODashboard() {
 
                   {manualSearch && (
                     <div style={{ background: '#fafafa', borderRadius: '12px', marginTop: '0.5rem', maxHeight: '200px', overflowY: 'auto', border: '1px solid var(--border)' }}>
-                      {employees.filter(e => e.role !== 'ceo' && e.name.toLowerCase().includes(manualSearch.toLowerCase())).map(emp => (
+                      {employees.filter(e => e.role !== 'ceo' && (e.name || '').toLowerCase().includes(manualSearch.toLowerCase())).map(emp => (
                         <div
                           key={emp.id}
                           style={{ padding: '1rem', borderBottom: '1px solid var(--border)', cursor: 'pointer', fontWeight: 600 }}
@@ -1013,7 +1013,7 @@ export default function CEODashboard() {
                 </button>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', maxHeight: '220px', overflowY: 'auto' }}>
-                {employees.filter(e => e.role === 'employee').sort((a,b) => a.name.localeCompare(b.name)).map(emp => (
+                {employees.filter(e => e.role === 'employee').sort((a,b) => (a.name || '').localeCompare(b.name || '')).map(emp => (
                   <label key={emp.id} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.6rem 0.5rem', cursor: 'pointer', borderRadius: '10px', background: selectedPayrollEmps.has(emp.id) ? 'rgba(99,102,241,0.07)' : 'transparent' }}>
                     <input
                       type="checkbox"

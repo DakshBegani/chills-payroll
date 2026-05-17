@@ -145,7 +145,7 @@ export default function AttendanceTaker() {
     return `${parts[2]}/${parts[1]}/${parts[0]}`;
   };
 
-  const filteredEmployees = employees.filter(e => e.role === 'employee' && e.name.toLowerCase().includes(searchQuery.toLowerCase()));
+  const filteredEmployees = employees.filter(e => e.role === 'employee' && (e.name || '').toLowerCase().includes(searchQuery.toLowerCase()));
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.3 }}>
@@ -198,7 +198,7 @@ export default function AttendanceTaker() {
             <div style={{paddingBottom: '5rem'}}>
               {employees
                 .filter(e => e.role === 'employee')
-                .sort((a, b) => a.name.localeCompare(b.name))
+                .sort((a, b) => (a.name || '').localeCompare(b.name || ''))
                 .map(emp => {
                 const status = bulkAttendance[emp.id];
                 const isAbsent = status === 'absent';
@@ -310,7 +310,7 @@ export default function AttendanceTaker() {
                   
                   {manualSearch && (
                     <div style={{background: '#fafafa', borderRadius: '12px', marginTop: '0.5rem', maxHeight: '200px', overflowY: 'auto', border: '1px solid var(--border)'}}>
-                      {employees.filter(e => e.role === 'employee' && e.name.toLowerCase().includes(manualSearch.toLowerCase())).map(emp => (
+                      {employees.filter(e => e.role === 'employee' && (e.name || '').toLowerCase().includes(manualSearch.toLowerCase())).map(emp => (
                         <div 
                           key={emp.id} 
                           style={{padding: '1rem', borderBottom: '1px solid var(--border)', cursor: 'pointer', fontWeight: 600}}
